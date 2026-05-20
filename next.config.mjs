@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const isDevelopment = process.env.NODE_ENV !== "production";
 
+// CSP NOTE: script-src and style-src both keep 'unsafe-inline' because Next.js
+// 15's hydration scripts and Tailwind's runtime style injection are inline by
+// default. Removing 'unsafe-inline' from script-src requires nonce-based
+// middleware that propagates a per-request nonce to every inline script tag —
+// a known-good production fix, but out of scope for this demo. If this app is
+// ever deployed publicly with real data, add that middleware and drop
+// 'unsafe-inline' from script-src.
 const securityHeaders = [
   {
     key: "Content-Security-Policy",

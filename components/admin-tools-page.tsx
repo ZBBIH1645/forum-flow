@@ -25,6 +25,21 @@ const checklist = [
 
 const formatDate = (iso?: string) => iso ? new Date(iso).toLocaleString() : "Never";
 
+const ARRAY_BACKUP_KEYS = [
+  "members",
+  "relationships",
+  "activity",
+  "placements",
+  "importSummaries",
+  "duplicateCases"
+] as const;
+
+function isValidBackupShape(value: unknown): value is LocalDataBackup {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return ARRAY_BACKUP_KEYS.every(key => key in record ? Array.isArray(record[key]) : true);
+}
+
 export function AdminToolsPage() {
   const data = useLiveData();
   const { getLocalDataStatus } = data;
@@ -71,7 +86,11 @@ export function AdminToolsPage() {
     }
     if (!window.confirm("Import this JSON backup? This replaces current local demo changes, including assignments, imports, duplicate review state, and activity history.")) return;
     try {
-      const parsed = JSON.parse(backupText) as LocalDataBackup;
+      const parsed: unknown = JSON.parse(backupText);
+      if (!isValidBackupShape(parsed)) {
+        showToast("Backup shape invalid. Expected an object with array fields.");
+        return;
+      }
       data.importLocalData(parsed);
       showToast("Local JSON backup imported.");
     } catch {

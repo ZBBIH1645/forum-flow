@@ -11,3 +11,5 @@ test-results/
 tsconfig.tsbuildinfo
 .DS_Store
 penguin-pet-run/
+docs/superpowers/
+docs/internal/

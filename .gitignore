@@ -1,0 +1,13 @@
+.next/
+node_modules/
+out/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.vercel
+test-results/
+tsconfig.tsbuildinfo
+.DS_Store
+penguin-pet-run/

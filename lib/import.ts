@@ -75,9 +75,9 @@ export const REQUIRED_IMPORT_FIELDS: ImportField[] = IMPORT_FIELDS.filter((f) =>
 
 export const SAMPLE_CSV =
   "Name,Company,Industry,Home Location,Business Location,Date Of Birth,Gender,Revenue Range,Employee Count,Years In Business,Business Stage,Status,Current Forum,Forum Style Preference,Relationship Review Completed,Notes\n" +
-  "Jordan Lee,Lee Growth Group,Professional Services,Downtown,Downtown,1978-04-12,Woman,$3M-$10M,18,12,Growth,Free Agent,,Balanced,No,Returning member after sabbatical\n" +
-  "Sam Patel,Patel Manufacturing,Manufacturing,Northside,West Loop,1969-11-02,Man,$10M-$25M,42,28,Mature,In Forum,Harbor Forum,Business-focused,Yes,Long-time operator\n" +
-  "Riley Brooks,Brooks Studio,Arts Entertainment and Recreation,Eastside,Eastside,,Woman,$1M-$3M,5,3,Startup,New Member,,Personal/deeper discussion,No,Missing DOB on legacy record";
+  "Jordan Lee,Lee Growth Group,Professional Services,Miami,Coral Gables,1978-04-12,Woman,$3M-$10M,18,12,Growth,Free Agent,,Balanced,No,Returning member after sabbatical\n" +
+  "Sam Patel,Patel Manufacturing,Manufacturing,Fort Lauderdale,Boca Raton,1969-11-02,Man,$10M-$25M,42,28,Mature,In Forum,Harbor Forum,Business-focused,Yes,Long-time operator\n" +
+  "Riley Brooks,Brooks Studio,Arts Entertainment and Recreation,Northside,Eastside,,Woman,$1M-$3M,5,3,Startup,New Member,,Personal/deeper discussion,No,Messy locations normalize to Other for review";
 
 /**
  * Suggest a mapping from CSV headers → ImportField using normalised exact match
@@ -202,6 +202,8 @@ export type RowOutcome = {
   statusWarning?: string;
   relationshipReviewWarning?: string;
   revenueWarning?: string;
+  homeLocationWarning?: string;
+  businessLocationWarning?: string;
   unknownForum: boolean;
   unknownForumName?: string;
   needsRelationshipReview: boolean;
@@ -266,6 +268,8 @@ export const analyzeRows = (
     const statusResult = normalizeMemberStatusValue(values.status ?? "");
     const relationshipResult = normalizeRelationshipReviewValue(values.relationshipReviewCompleted ?? "");
     const revenueResult = normalizeRevenueRange(values.revenueRange ?? "");
+    const homeLocationResult = normalizeLocationLabel(values.homeLocation ?? "");
+    const businessLocationResult = normalizeLocationLabel(values.businessLocation ?? "");
     const invalidNumberFields: ImportField[] = [];
     if ((values.employeeCount ?? "").trim() && !normalizePositiveInteger(values.employeeCount ?? "").value) invalidNumberFields.push("employeeCount");
     if ((values.yearsInBusiness ?? "").trim() && !normalizePositiveInteger(values.yearsInBusiness ?? "").value) invalidNumberFields.push("yearsInBusiness");
@@ -291,6 +295,8 @@ export const analyzeRows = (
       statusWarning: statusResult.warning,
       relationshipReviewWarning: relationshipResult.warning,
       revenueWarning: revenueResult.warning,
+      homeLocationWarning: homeLocationResult.warning,
+      businessLocationWarning: businessLocationResult.warning,
       unknownForum,
       unknownForumName: unknownForum ? currentForumRaw : undefined,
       needsRelationshipReview,
@@ -437,7 +443,9 @@ export const computeImpact = (outcomes: RowOutcome[]): ImportImpact => ({
     o.unknownForum ||
     o.statusNeedsReview ||
     Boolean(o.relationshipReviewWarning) ||
-    Boolean(o.revenueWarning)
+    Boolean(o.revenueWarning) ||
+    Boolean(o.homeLocationWarning) ||
+    Boolean(o.businessLocationWarning)
   ).length,
   needsRelationshipReviewRows: outcomes.filter((o) => o.needsRelationshipReview).length
 });

@@ -8,6 +8,7 @@ import { inputLimits, sanitizeSingleLine } from "@/lib/security";
 import { ForumBadge } from "./forum-badge";
 import { StatusBadge } from "./status-badge";
 import { getFuzzySuggestions, getSearchableTerms, matchesSearch } from "@/lib/search";
+import { buildMemberFlags, summarizeConflicts, summarizeMissingFields } from "@/lib/member-insights";
 import type { MemberStatus } from "@/lib/types";
 
 type AssignmentFilter = "All" | "Free Agents" | "In Forums" | "Missing Data" | "Review Flags";
@@ -34,10 +35,20 @@ export function MemberDirectory({
   const [page, setPage] = useState(1);
   const pageSize = 14;
 
+  const relationshipsByMemberId = useMemo(() => {
+    const map = new Map<string, typeof relationships>();
+    for (const relationship of relationships) {
+      for (const id of [relationship.memberId, relationship.relatedMemberId]) {
+        map.set(id, [...(map.get(id) ?? []), relationship]);
+      }
+    }
+    return map;
+  }, [relationships]);
+
   const filtered = useMemo(() => {
     return members.filter((member) => {
       const quality = getDataQuality(member);
-      const memberRelationships = relationships.filter((relationship) => relationship.memberId === member.id || relationship.relatedMemberId === member.id);
+      const memberRelationships = relationshipsByMemberId.get(member.id) ?? [];
       if (assignmentFilter === "Free Agents" && (member.currentForumId || member.assignedForumId || member.status === "Former Member")) return false;
       if (assignmentFilter === "In Forums" && !member.currentForumId) return false;
       if (assignmentFilter === "Missing Data" && quality[0] === "Complete") return false;
@@ -45,7 +56,7 @@ export function MemberDirectory({
       if (statusFilter !== "All" && member.status !== statusFilter) return false;
       return matchesSearch(query, [member.name, member.company, member.industry, member.homeLocation, member.businessLocation, member.revenueRange, getEffectiveStatus(member)]);
     });
-  }, [assignmentFilter, getDataQuality, getEffectiveStatus, members, query, relationships, statusFilter]);
+  }, [assignmentFilter, getDataQuality, getEffectiveStatus, members, query, relationshipsByMemberId, statusFilter]);
 
   const searchTerms = useMemo(() => getSearchableTerms({ members, forums, statuses: memberStatuses }), [forums, members]);
   const suggestions = useMemo(() => filtered.length === 0 ? getFuzzySuggestions(query, searchTerms) : [], [filtered.length, query, searchTerms]);
@@ -241,7 +252,9 @@ export function MemberDirectory({
               {pageMembers.map((member) => {
                 const quality = getDataQuality(member);
                 const duplicates = getDuplicateCasesForMember(member.id);
-                const conflictCount = relationships.filter((relationship) => relationship.memberId === member.id || relationship.relatedMemberId === member.id).length;
+                const memberRelationships = relationshipsByMemberId.get(member.id) ?? [];
+                const conflictSummary = summarizeConflicts(member, memberRelationships, members, forums);
+                const flags = buildMemberFlags(member, quality);
                 const forum = member.currentForumId
                   ? forums.find((f) => f.id === member.currentForumId)
                   : member.assignedForumId
@@ -277,8 +290,16 @@ export function MemberDirectory({
                       )}
                     </td>
                     <td className="px-4 py-4"><StatusBadge status={getEffectiveStatus(member)} /></td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{quality[0]}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{conflictCount}</td>
+                    <td className="px-4 py-4 text-sm text-slate-700">
+                      <p className="font-medium text-ink">{summarizeMissingFields(quality)}</p>
+                      {flags.slice(0, 2).map((flag) => (
+                        <p key={flag.label} className="mt-1 text-xs text-muted" title={`${flag.reason} ${flag.recommendedAction}`}>{flag.label}: {flag.recommendedAction}</p>
+                      ))}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-slate-700">
+                      <p className="font-medium text-ink">{conflictSummary.count ? conflictSummary.summary : "None"}</p>
+                      {conflictSummary.details.slice(0, 2).map((detail) => <p key={detail} className="mt-1 text-xs text-muted">{detail}</p>)}
+                    </td>
                     <td className="px-4 py-4">
                       <Link href={`/members/${member.id}`} className="whitespace-nowrap text-sm font-semibold text-eo-blue hover:text-eo-purple">Open profile</Link>
                     </td>

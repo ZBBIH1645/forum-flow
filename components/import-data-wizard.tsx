@@ -665,6 +665,8 @@ function ImpactStep(props: {
               if (outcome.statusNeedsReview) flags.push(outcome.statusWarning ?? "Status needs review");
               if (outcome.relationshipReviewWarning) flags.push(outcome.relationshipReviewWarning);
               if (outcome.revenueWarning) flags.push(outcome.revenueWarning);
+              if (outcome.homeLocationWarning) flags.push(outcome.homeLocationWarning);
+              if (outcome.businessLocationWarning) flags.push(outcome.businessLocationWarning);
               if (outcome.needsRelationshipReview) flags.push("Needs relationship review");
               return (
                 <tr key={outcome.rowNumber}>

@@ -18,6 +18,8 @@ import {
   Users
 } from "lucide-react";
 import { CompatibilityBadge } from "./compatibility-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
+import { MissingInfoResolutionPanel } from "./missing-info-resolution-panel";
 import { PrivacyNote } from "./privacy-note";
 import { StatusBadge } from "./status-badge";
 import { useLiveData, decisionReasons, isMemberReadyToAssign } from "./live-data-provider";
@@ -30,6 +32,8 @@ import {
 } from "@/lib/assignments";
 import { inputLimits, sanitizeSingleLine } from "@/lib/security";
 import { getFuzzySuggestions, getSearchableTerms, matchesSearch } from "@/lib/search";
+import { missingRequiredFields } from "@/lib/data-quality";
+import { buildMemberFlags, summarizeConflicts } from "@/lib/member-insights";
 import type { CompatibilityReview, DecisionReason, ForumGroup, Member } from "@/lib/types";
 import { ForumBadge } from "./forum-badge";
 
@@ -260,7 +264,7 @@ const buildSections = (
   for (const member of members) {
     const conflictCount = relationships.filter((r) => r.memberId === member.id || r.relatedMemberId === member.id).length;
     const quality = getDataQuality(member);
-    const missingFields = quality.filter((label) => label !== "Complete");
+    const missingFields = missingRequiredFields(quality);
 
     if (member.status === "In Forum" || member.status === "Placed") continue;
     if (member.status === "Former Member") continue;
@@ -340,7 +344,7 @@ const buildSections = (
       assignedForum: forum,
       daysLeft: getAssignmentDaysLeft(member),
       conflictCount,
-      missingFields: quality.filter((label) => label !== "Complete"),
+      missingFields: missingRequiredFields(quality),
       recommendedAction: "Review",
       noteForSection: placement.note || placement.reason
     };
@@ -439,6 +443,10 @@ function QueueRowCard({ sectionKey, row, data }: { sectionKey: SectionKey; row: 
   const reasonValue = reason ? reason : undefined;
 
   const handleAssign = () => {
+    if (missingFields.length > 0 && !note.trim()) {
+      showToast("This member is missing required info. Add a decision note to override.");
+      return;
+    }
     const forumId = selectedForumId || topMatch?.forum.id;
     if (!forumId) return;
     const forum = data.getForumById(forumId);
@@ -492,6 +500,8 @@ function QueueRowCard({ sectionKey, row, data }: { sectionKey: SectionKey; row: 
   const age = calculateAge(member);
   const isAssignedSection = sectionKey === "assignedPending" || sectionKey === "expiringSoon" || sectionKey === "expired";
   const isFreeAgentLikeSection = sectionKey === "needsInfo" || sectionKey === "needsConflictReview" || sectionKey === "readyToAssign" || sectionKey === "shortlisted";
+  const flags = buildMemberFlags(member, data.getDataQuality(member));
+  const conflictSummary = summarizeConflicts(member, data.relationships.filter((relationship) => relationship.memberId === member.id || relationship.relatedMemberId === member.id), data.members, data.forums);
 
   return (
     <div className="flex flex-col gap-4 p-5">
@@ -517,11 +527,11 @@ function QueueRowCard({ sectionKey, row, data }: { sectionKey: SectionKey; row: 
 
         <div className="space-y-1 text-sm">
           {missingFields.length > 0 ? (
-            <p className="text-amber-800"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" /> Missing: {missingFields.join(", ")}</p>
+            <p className="text-amber-800"><AlertTriangle className="mr-1 inline h-3.5 w-3.5" /> {flags[0]?.label ?? "Needs Info"}: {missingFields.join(", ")}</p>
           ) : (
             <p className="text-slate-600">Data quality: Complete</p>
           )}
-          {conflictCount > 0 ? <p className="text-orange-700">{conflictCount} conflict{conflictCount === 1 ? "" : "s"} on file</p> : null}
+          {conflictCount > 0 ? <p className="text-orange-700">{conflictSummary.summary}</p> : null}
           {assignedForum ? (
             <p className="flex items-center gap-2 text-indigo-700">Assigned to <ForumBadge forumId={assignedForum.id} name={assignedForum.name} size="xs" /></p>
           ) : topMatch ? (
@@ -555,6 +565,8 @@ function QueueRowCard({ sectionKey, row, data }: { sectionKey: SectionKey; row: 
 
       {open ? (
         <div className="rounded-lg border border-line bg-slate-50 p-4">
+          {missingFields.length > 0 ? <MissingInfoResolutionPanel member={member} compact /> : null}
+          <ConflictSummaryPanel member={member} compact />
           <div className="grid gap-3 md:grid-cols-2">
             <label>
               <span className="text-xs font-semibold uppercase tracking-wide text-muted">Reason</span>

@@ -21,9 +21,11 @@ import {
   XCircle
 } from "lucide-react";
 import { CompatibilityBadge } from "./compatibility-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
 import { CompareCandidates } from "./compare-candidates";
 import { ForumBadge } from "./forum-badge";
 import { ForumLegend } from "./forum-legend";
+import { MissingInfoResolutionPanel } from "./missing-info-resolution-panel";
 import { PrivacyNote } from "./privacy-note";
 import { StatusBadge } from "./status-badge";
 import { useLiveData, decisionReasons } from "./live-data-provider";
@@ -470,6 +472,8 @@ function CandidateRow({
 
       {open ? (
         <div className="mt-3 rounded-lg border border-line bg-white p-3">
+          {memberHasMissing ? <MissingInfoResolutionPanel member={member} compact /> : null}
+          <ConflictSummaryPanel member={member} compact />
           <div className="grid gap-2 md:grid-cols-2">
             <select
               value={reason}
@@ -498,6 +502,10 @@ function CandidateRow({
                 <button
                   type="button"
                   onClick={() => {
+                    if (memberHasMissing && !note.trim()) {
+                      showToast("This member is missing required info. Add a decision note to override.");
+                      return;
+                    }
                     data.addToShortlist({ member, forum, note, reason: reasonValue });
                     showToast("Shortlisted");
                     setOpen(false);

@@ -22,9 +22,11 @@ import {
 import { PrivacyNote } from "./privacy-note";
 import { StatusBadge } from "./status-badge";
 import { ForumBadge } from "./forum-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
+import { MissingInfoResolutionPanel } from "./missing-info-resolution-panel";
 import { useLiveData, decisionReasons } from "./live-data-provider";
 import { calculateAge } from "@/lib/assignments";
-import { daysSinceUpdate, isStaleRecord, meetsRequiredFields, missingRequiredFields } from "@/lib/data-quality";
+import { daysSinceUpdate, hasCompletedRequiredInfo, isStaleRecord, meetsRequiredFields, missingRequiredFields } from "@/lib/data-quality";
 import { inputLimits, sanitizeSingleLine } from "@/lib/security";
 import { getFuzzySuggestions, getSearchableTerms, matchesSearch } from "@/lib/search";
 import type { DataQualityLabel, DecisionReason, Member } from "@/lib/types";
@@ -343,7 +345,7 @@ function MemberRow({ member, labels, data, recommended }: { member: Member; labe
 
   const reasonValue = reason ? reason : undefined;
   const missingFields = missingRequiredFields(labels);
-  const isReady = !member.currentForumId && !member.assignedForumId && meetsRequiredFields(labels);
+  const isReady = !member.currentForumId && !member.assignedForumId && hasCompletedRequiredInfo(labels);
   const days = daysSinceUpdate(member);
   const stale = isStaleRecord(member);
   const conflictCount = labels.includes("Has Hard Conflicts") ? "≥1 hard" : labels.includes("Missing Relationship Review") ? "not reviewed" : "reviewed";
@@ -410,6 +412,8 @@ function MemberRow({ member, labels, data, recommended }: { member: Member; labe
 
       {open ? (
         <div className="mt-3 rounded-lg border border-line bg-slate-50 p-3">
+          {missingFields.length > 0 ? <MissingInfoResolutionPanel member={member} compact /> : null}
+          <ConflictSummaryPanel member={member} compact />
           <div className="grid gap-2 md:grid-cols-2">
             <select
               value={reason}

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { PrivacyNote } from "./privacy-note";
 import { StatusBadge } from "./status-badge";
+import { MissingInfoResolutionPanel } from "./missing-info-resolution-panel";
 import { useLiveData, decisionReasons } from "./live-data-provider";
 import { calculateAge } from "@/lib/assignments";
 import { computeDataQualityLabels, daysSinceUpdate, meetsRequiredFields, missingRequiredFields } from "@/lib/data-quality";
@@ -272,6 +273,7 @@ function IntakeRow({ row, data }: { row: { member: Member; missing: string[]; re
 
       {open ? (
         <div className="mt-3 rounded-lg border border-line bg-slate-50 p-3">
+          {missing.length > 0 ? <MissingInfoResolutionPanel member={member} compact /> : null}
           <div className="grid gap-2 md:grid-cols-2">
             <select
               value={reason}

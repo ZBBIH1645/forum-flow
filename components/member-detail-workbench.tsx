@@ -5,8 +5,10 @@ import Link from "next/link";
 import { AlertTriangle, Building2, CheckCircle2, Clipboard, GitMerge, MapPin, Scale, ShieldCheck, UsersRound } from "lucide-react";
 import { CompareForums } from "./compare-forums";
 import { CompatibilityBadge } from "./compatibility-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
 import { ForumBadge } from "./forum-badge";
 import { MatchDecisionButtons } from "./match-decision-buttons";
+import { MissingInfoResolutionPanel } from "./missing-info-resolution-panel";
 import { MemberForm } from "./member-form";
 import { PlacementActions } from "./placement-actions";
 import { PrivacyNote } from "./privacy-note";
@@ -14,7 +16,7 @@ import { StatusBadge } from "./status-badge";
 import { relationshipSeverities, relationshipTypes, useLiveData } from "./live-data-provider";
 import { getForumMatchesForMemberFromData } from "@/lib/matching";
 import { calculateAge, getAssignmentDaysLeft } from "@/lib/assignments";
-import { daysSinceUpdate, isStaleRecord, meetsRequiredFields, missingRequiredFields } from "@/lib/data-quality";
+import { daysSinceUpdate, hasCompletedRequiredInfo, isStaleRecord, missingRequiredFields } from "@/lib/data-quality";
 import type { MemberRelationship } from "@/lib/types";
 
 export function MemberDetailWorkbench({ memberId }: { memberId: string }) {
@@ -155,6 +157,8 @@ export function MemberDetailWorkbench({ memberId }: { memberId: string }) {
       </div>
 
       <DataQualityPanel member={member} qualityLabels={quality} data={data} />
+      <MissingInfoResolutionPanel member={member} />
+      <ConflictSummaryPanel member={member} />
 
       {duplicateCases.length > 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-card">
@@ -236,6 +240,7 @@ export function MemberDetailWorkbench({ memberId }: { memberId: string }) {
           {member.intakeDisclosures ? (
             <IntakeDisclosurePanel disclosures={member.intakeDisclosures} submittedAt={member.intakeSubmittedAt} />
           ) : null}
+          <div id="relationships">
           <RelationshipPanel
             memberId={member.id}
             members={members}
@@ -244,6 +249,7 @@ export function MemberDetailWorkbench({ memberId }: { memberId: string }) {
             setDraft={setRelationshipDraft}
             onSave={addRelationship}
           />
+          </div>
           <ActivityHistoryPanel activity={memberActivity} />
         </div>
 
@@ -284,7 +290,7 @@ function Metric({ icon: Icon, label, value }: { icon: typeof Building2; label: s
 
 function DataQualityPanel({ member, qualityLabels, data }: { member: import("@/lib/types").Member; qualityLabels: import("@/lib/types").DataQualityLabel[]; data: ReturnType<typeof useLiveData> }) {
   const missing = missingRequiredFields(qualityLabels);
-  const ready = meetsRequiredFields(qualityLabels);
+  const ready = hasCompletedRequiredInfo(qualityLabels);
   const stale = isStaleRecord(member);
   const days = daysSinceUpdate(member);
   const reviewedAt = member.relationshipReviewedAt ? new Date(member.relationshipReviewedAt).toLocaleDateString() : null;

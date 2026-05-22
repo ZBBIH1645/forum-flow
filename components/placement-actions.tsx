@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Hourglass, UserCheck, UserX, XCircle } from "lucide-react";
 import { decisionReasons, useLiveData } from "./live-data-provider";
 import { CompatibilityBadge } from "./compatibility-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
 import { calculateAge, getAssignmentDaysLeft } from "@/lib/assignments";
 import type { CompatibilityLabel, DecisionReason } from "@/lib/types";
 
@@ -24,7 +25,7 @@ export function PlacementActions({
   memberName: string;
   options: PlacementOption[];
 }) {
-  const { getMemberById, getForumById, assignToForum, confirmInForum, rejectAssignment, returnToFreeAgent, recordPlacementDecision, updateMemberStatus, getEffectiveStatus } = useLiveData();
+  const { getMemberById, getForumById, assignToForum, confirmInForum, rejectAssignment, returnToFreeAgent, recordPlacementDecision, updateMemberStatus, getEffectiveStatus, getMissingRequiredFields } = useLiveData();
   const member = getMemberById(memberId);
 
   const effectiveStatus = member ? getEffectiveStatus(member) : undefined;
@@ -46,8 +47,13 @@ export function PlacementActions({
   if (!member) return null;
 
   const reasonValue = reason ? reason : undefined;
+  const missingRequired = getMissingRequiredFields(member);
 
   const handleAssign = () => {
+    if (missingRequired.length > 0 && !note.trim()) {
+      showToast("This member is missing required info. Add a decision note to override.");
+      return;
+    }
     if (!selectedOption) return;
     const forum = getForumById(selectedOption.forumId);
     if (!forum) return;
@@ -57,6 +63,10 @@ export function PlacementActions({
   };
 
   const handleShortlist = () => {
+    if (missingRequired.length > 0 && !note.trim()) {
+      showToast("This member is missing required info. Add a decision note to override.");
+      return;
+    }
     if (!selectedOption) return;
     const forum = getForumById(selectedOption.forumId);
     if (!forum) return;
@@ -164,6 +174,10 @@ export function PlacementActions({
           </div>
         </div>
       )}
+
+      <div className="mt-4">
+        <ConflictSummaryPanel member={member} compact />
+      </div>
 
       <label className="mt-4 block">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">Decision note</span>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock, Hourglass, UsersRound } from "lucide-react";
 import { CompatibilityBadge } from "./compatibility-badge";
+import { ConflictSummaryPanel } from "./conflict-summary-panel";
 import { LocalPlacementDecisions } from "./local-placement-decisions";
 import { MatchDecisionButtons } from "./match-decision-buttons";
 import { PrivacyNote } from "./privacy-note";
@@ -128,6 +129,9 @@ export function LiveForumDetail({ forumId }: { forumId: string }) {
                   <p className="mt-1 text-xs font-semibold text-indigo-800">
                     Next action: {expired ? "Return To Free Agent or reassign" : "Confirm / Mark In Forum or Reject / Return To Free Agent"}
                   </p>
+                  <div className="mt-3">
+                    <ConflictSummaryPanel member={member} compact />
+                  </div>
                   <MatchDecisionButtons memberId={member.id} memberName={member.name} forumId={forum.id} forumName={forum.name} label="Possible Fit" context="assigned" />
                 </div>
               );
@@ -155,6 +159,9 @@ export function LiveForumDetail({ forumId }: { forumId: string }) {
                   <span>{[...match.hardBlockers, ...match.softWarnings].slice(0, 2).join(" ")}</span>
                 </div>
               ) : null}
+              <div className="mt-3">
+                <ConflictSummaryPanel member={match.member} compact />
+              </div>
               <MatchDecisionButtons memberId={match.member.id} memberName={match.member.name} forumId={forum.id} forumName={forum.name} label={match.label} context="free-agent" />
             </div>
           ))}

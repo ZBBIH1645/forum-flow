@@ -10,6 +10,7 @@ import {
   revenueRanges,
   useLiveData
 } from "./live-data-provider";
+import { LocationSelect } from "./location-select";
 import type { Member } from "@/lib/types";
 
 const blankMember = (): Omit<Member, "id"> => ({
@@ -108,8 +109,8 @@ export function MemberForm({ memberId }: { memberId?: string }) {
         <Field label="Name" value={form.name} onChange={(value) => update("name", value)} />
         <Field label="Company" value={form.company} onChange={(value) => update("company", value)} />
         <Field label="Industry" value={form.industry} onChange={(value) => update("industry", value)} />
-        <Field label="Home location" value={form.homeLocation} onChange={(value) => update("homeLocation", value)} />
-        <Field label="Business location" value={form.businessLocation} onChange={(value) => update("businessLocation", value)} />
+        <LocationSelect label="Home Location" value={form.homeLocation} onChange={(value) => update("homeLocation", value)} />
+        <LocationSelect label="Business Location" value={form.businessLocation} onChange={(value) => update("businessLocation", value)} />
         <Select label="Gender" value={form.gender} options={genders} onChange={(value) => update("gender", value as Member["gender"])} />
         <Field label="Age" type="number" value={String(form.age)} onChange={(value) => update("age", Number(value) || 0)} />
         <Select label="Revenue range" value={form.revenueRange} options={revenueRanges} onChange={(value) => update("revenueRange", value)} />

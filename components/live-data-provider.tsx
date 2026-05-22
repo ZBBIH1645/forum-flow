@@ -10,6 +10,7 @@ import {
   computeDataQualityLabels,
   daysSinceUpdate,
   hasMissingRequiredFields,
+  hasCompletedRequiredInfo,
   isStaleRecord,
   meetsRequiredFields,
   missingRequiredFields
@@ -184,6 +185,17 @@ const combineMemberArrays = (a: string[] = [], b: string[] = [], survivorId: str
   unique([...a, ...b].map((id) => id === mergedId ? survivorId : id).filter((id) => id !== survivorId && id !== mergedId));
 
 const relationshipRank: Record<RelationshipSeverity, number> = { "Note Only": 1, "Needs Review": 2, Blocked: 3 };
+
+const memberRelationshipsFor = (member: Member, relationships: MemberRelationship[]) =>
+  relationships.filter((relationship) => relationship.memberId === member.id || relationship.relatedMemberId === member.id);
+
+const nextStatusAfterConflictReview = (member: Member, relationships: MemberRelationship[]): MemberStatus => {
+  if (member.status !== "Needs Conflict Review") return member.status;
+  const labels = computeDataQualityLabels(member, relationships);
+  if (missingRequiredFields(labels).length > 0) return "Needs Info";
+  if (!member.currentForumId && !member.assignedForumId && hasCompletedRequiredInfo(labels)) return "Ready To Assign";
+  return "Free Agent";
+};
 
 const reassignRelationships = (relationships: MemberRelationship[], survivorId: string, mergedId: string) => {
   const byKey = new Map<string, MemberRelationship>();
@@ -446,7 +458,7 @@ function useLiveDataValue() {
 
   const saveRelationship = useCallback((relationship: Omit<MemberRelationship, "id"> & { id?: string }) => {
     const id = relationship.id ?? `rel-local-${Date.now()}`;
-    const nextRelationship: MemberRelationship = { ...relationship, id };
+    const nextRelationship: MemberRelationship = { ...relationship, id, reviewed: relationship.severity === "Note Only" ? true : relationship.reviewed };
     const existing = readJson<MemberRelationship[]>(liveRelationshipsKey, []);
     writeJson(liveRelationshipsKey, [nextRelationship, ...existing.filter((item) => item.id !== id)]);
     const member = membersById.get(relationship.memberId);
@@ -457,6 +469,56 @@ function useLiveDataValue() {
       detail: `${relationship.type} relationship recorded as ${relationship.severity}.`
     });
   }, [addActivity, membersById]);
+
+  const markMemberConflictsReviewed = useCallback(({ member, note }: { member: Member; note?: string }) => {
+    const existing = readJson<MemberRelationship[]>(liveRelationshipsKey, []);
+    const mergedRelationships = relationships;
+    const targetRelationships = memberRelationshipsFor(member, mergedRelationships).filter((relationship) => relationship.severity !== "Note Only");
+    const unreviewed = targetRelationships.filter((relationship) => !relationship.reviewed);
+    if (unreviewed.length === 0 && member.relationshipReviewCompleted && member.status !== "Needs Conflict Review") return;
+
+    const now = new Date().toISOString();
+    const existingById = new Map(existing.map((relationship) => [relationship.id, relationship]));
+    for (const relationship of unreviewed) {
+      existingById.set(relationship.id, {
+        ...relationship,
+        reviewed: true,
+        reviewedAt: now,
+        reviewNote: note?.trim() || relationship.reviewNote
+      });
+    }
+    writeJson(liveRelationshipsKey, Array.from(existingById.values()));
+
+    const nextRelationships = mergedRelationships.map((relationship) =>
+      unreviewed.some((item) => item.id === relationship.id)
+        ? { ...relationship, reviewed: true, reviewedAt: now, reviewNote: note?.trim() || relationship.reviewNote }
+        : relationship
+    );
+    const nextMember: Member = {
+      ...member,
+      relationshipReviewCompleted: true,
+      relationshipReviewedAt: now,
+      status: nextStatusAfterConflictReview({ ...member, relationshipReviewCompleted: true }, nextRelationships),
+      updatedAt: now
+    };
+    const nextMembers = mergeMembers(readJson<Member[]>(liveMembersKey, [])).map((item) => item.id === nextMember.id ? nextMember : item);
+    if (!nextMembers.some((item) => item.id === nextMember.id)) nextMembers.unshift(nextMember);
+    persistMembers(nextMembers);
+
+    const relatedNames = unreviewed.map((relationship) => {
+      const relatedId = relationship.memberId === member.id ? relationship.relatedMemberId : relationship.memberId;
+      const related = membersById.get(relatedId);
+      return `${relationship.type}${related ? ` with ${related.name}` : ""}`;
+    });
+    addActivity({
+      type: "Conflict reviewed",
+      memberId: member.id,
+      memberName: member.name,
+      detail: relatedNames.length > 0
+        ? `Conflict reviewed for ${member.name}: ${relatedNames.join("; ")}.${note ? ` Note: ${note}` : ""}`
+        : `Conflict review confirmed for ${member.name}.${note ? ` Note: ${note}` : ""}`
+    });
+  }, [addActivity, membersById, persistMembers, relationships]);
 
   const addMembersBulk = useCallback((newMembers: Member[]) => {
     if (newMembers.length === 0) return;
@@ -594,6 +656,17 @@ function useLiveDataValue() {
     recordLocalDecision(decision);
 
     if (status === "Shortlisted") {
+      const missing = missingRequiredFields(computeDataQualityLabels(member, relationships));
+      if (missing.length > 0 && note.trim()) {
+        addActivity({
+          type: "Decision note added",
+          memberId: member.id,
+          memberName: member.name,
+          forumId: forum.id,
+          forumName: forum.name,
+          detail: `Missing info override used for shortlist. Missing: ${missing.join(", ")}. Note: ${note}`
+        });
+      }
       saveMember({ ...member, status: "Shortlisted" }, "Match shortlisted", `${member.name} shortlisted for ${forum.name}.`);
     } else if (status === "Needs Review") {
       saveMember({ ...member, status: "Needs Conflict Review" }, "Needs review", `${member.name} flagged for review against ${forum.name}.`);
@@ -607,7 +680,7 @@ function useLiveDataValue() {
         detail: `${member.name} was rejected for ${forum.name}.${note ? ` ${note}` : ""}`
       });
     }
-  }, [addActivity, recordLocalDecision, saveMember]);
+  }, [addActivity, recordLocalDecision, relationships, saveMember]);
 
   const assignToForum = useCallback(({
     member,
@@ -629,6 +702,17 @@ function useLiveDataValue() {
       assignmentStartDate: startDate,
       assignmentExpiresAt: expiresAt
     };
+    const missing = missingRequiredFields(computeDataQualityLabels(member, relationships));
+    if (missing.length > 0) {
+      addActivity({
+        type: "Decision note added",
+        memberId: member.id,
+        memberName: member.name,
+        forumId: forum.id,
+        forumName: forum.name,
+        detail: `Missing info override used for assignment. Missing: ${missing.join(", ")}. Note: ${note}`
+      });
+    }
     saveMember(
       nextMember,
       "Member assigned to Forum",
@@ -644,7 +728,7 @@ function useLiveDataValue() {
       reason,
       createdAt: startDate
     });
-  }, [recordLocalDecision, saveMember]);
+  }, [addActivity, recordLocalDecision, relationships, saveMember]);
 
   const confirmInForum = useCallback(({
     member,
@@ -755,6 +839,45 @@ function useLiveDataValue() {
   }) => {
     const nextMember: Member = { ...member, status };
     saveMember(nextMember, "Status changed", `${member.name} status changed to ${status}.${note ? ` ${note}` : ""}`);
+  }, [saveMember]);
+
+  const updateMissingInfo = useCallback(({
+    member,
+    updates,
+    note
+  }: {
+    member: Member;
+    updates: Partial<Member>;
+    note?: string;
+  }) => {
+    const nextMember: Member = {
+      ...member,
+      ...updates,
+      relationshipReviewedAt: updates.relationshipReviewCompleted ? new Date().toISOString() : member.relationshipReviewedAt
+    };
+    const labels = computeDataQualityLabels(nextMember, relationships);
+    const nextAction = hasCompletedRequiredInfo(labels)
+      ? " Required info is complete; Mark Ready To Assign is available after relationship review."
+      : ` Still missing: ${missingRequiredFields(labels).join(", ")}.`;
+    saveMember(nextMember, "Member edited", `Missing info updated for ${member.name}.${nextAction}${note ? ` Note: ${note}` : ""}`);
+  }, [relationships, saveMember]);
+
+  const markInfoRequested = useCallback(({ member, note }: { member: Member; note?: string }) => {
+    const detail = `Info requested for ${member.name}.${note ? ` ${note}` : ""}`;
+    if (member.status !== "Needs Info" && !member.currentForumId && !member.assignedForumId) {
+      saveMember({ ...member, status: "Needs Info" }, "Status changed", detail);
+      return;
+    }
+    addActivity({
+      type: "Decision note added",
+      memberId: member.id,
+      memberName: member.name,
+      detail
+    });
+  }, [addActivity, saveMember]);
+
+  const putMemberOnHold = useCallback(({ member, note }: { member: Member; note?: string }) => {
+    saveMember({ ...member, status: "On Hold" }, "Status changed", `${member.name} put on hold.${note ? ` Reason: ${note}` : ""}`);
   }, [saveMember]);
 
   const findPossibleDuplicates = useCallback((draft: { name?: string; company?: string; dateOfBirth?: string; excludeId?: string }) => {
@@ -871,18 +994,13 @@ function useLiveDataValue() {
   }, [saveMember]);
 
   const markRelationshipReviewed = useCallback(({ member, note }: { member: Member; note?: string }) => {
-    const nextMember: Member = {
-      ...member,
-      relationshipReviewCompleted: true,
-      relationshipReviewedAt: new Date().toISOString()
-    };
-    saveMember(nextMember, "Relationship review completed", `Relationship review marked complete for ${member.name}.${note ? ` ${note}` : ""}`);
-  }, [saveMember]);
+    markMemberConflictsReviewed({ member, note });
+  }, [markMemberConflictsReviewed]);
 
   const markReadyToAssign = useCallback(({ member, note }: { member: Member; note?: string }) => {
     if (member.currentForumId || member.assignedForumId) return;
     const labels = computeDataQualityLabels(member, relationships);
-    if (!meetsRequiredFields(labels)) return;
+    if (!hasCompletedRequiredInfo(labels)) return;
     const nextMember: Member = { ...member, status: "Ready To Assign" };
     saveMember(nextMember, "Marked Ready To Assign", `${member.name} marked Ready To Assign.${note ? ` ${note}` : ""}`);
   }, [relationships, saveMember]);
@@ -962,6 +1080,17 @@ function useLiveDataValue() {
       reason,
       createdAt: new Date().toISOString()
     });
+    const missing = missingRequiredFields(computeDataQualityLabels(member, relationships));
+    if (missing.length > 0 && note.trim()) {
+      addActivity({
+        type: "Decision note added",
+        memberId: member.id,
+        memberName: member.name,
+        forumId: forum.id,
+        forumName: forum.name,
+        detail: `Missing info override used for shortlist. Missing: ${missing.join(", ")}. Note: ${note}`
+      });
+    }
     const eligibleForShortlistFlag =
       member.status === "Free Agent" ||
       member.status === "New Member" ||
@@ -980,7 +1109,7 @@ function useLiveDataValue() {
         detail: `${member.name} added to ${forum.name}'s shortlist.${note ? ` ${note}` : ""}`
       });
     }
-  }, [addActivity, recordLocalDecision, saveMember]);
+  }, [addActivity, recordLocalDecision, relationships, saveMember]);
 
   const removeFromShortlist = useCallback(({
     member,
@@ -1300,7 +1429,11 @@ function useLiveDataValue() {
     returnToFreeAgent,
     markAssignmentExpired,
     updateMemberStatus,
+    updateMissingInfo,
+    markInfoRequested,
+    putMemberOnHold,
     markRelationshipReviewed,
+    markMemberConflictsReviewed,
     markReadyToAssign,
     submitIntake,
     markIntakeReviewed,

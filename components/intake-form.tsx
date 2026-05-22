@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { businessStages, forumStyles, genders, revenueRanges, useLiveData } from "./live-data-provider";
+import { LocationSelect } from "./location-select";
 import { PrivacyNote } from "./privacy-note";
 import type { BusinessStage, ForumStyle, Gender, IntakeDisclosures, Member } from "@/lib/types";
 
@@ -227,8 +228,8 @@ export function IntakeForm() {
             <Field label="Last name" value={form.lastName} onChange={(v) => update("lastName", v)} required />
             <Field label="Date of birth" type="date" value={form.dateOfBirth} onChange={(v) => update("dateOfBirth", v)} required />
             <Select label="Gender" value={form.gender} options={genders} onChange={(v) => update("gender", v as Gender)} />
-            <Field label="Home location" value={form.homeLocation} onChange={(v) => update("homeLocation", v)} required placeholder="Neighborhood, city, or zone" />
-            <Field label="Business location" value={form.businessLocation} onChange={(v) => update("businessLocation", v)} required placeholder="Where your business operates" />
+            <LocationSelect label="Home Location" value={form.homeLocation} onChange={(v) => update("homeLocation", v)} required />
+            <LocationSelect label="Business Location" value={form.businessLocation} onChange={(v) => update("businessLocation", v)} required />
           </div>
         </Section>
 

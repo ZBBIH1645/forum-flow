@@ -150,6 +150,9 @@ export type MemberRelationship = {
   type: RelationshipType;
   severity: RelationshipSeverity;
   notes: string;
+  reviewed?: boolean;
+  reviewedAt?: string;
+  reviewNote?: string;
 };
 
 export type ActivityEvent = {
@@ -167,6 +170,7 @@ export type ActivityEvent = {
     | "Assignment expired"
     | "Member returned to Free Agent"
     | "Conflict added"
+    | "Conflict reviewed"
     | "Match rejected"
     | "Match shortlisted"
     | "Added to shortlist"

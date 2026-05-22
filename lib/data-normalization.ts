@@ -1,5 +1,6 @@
 import type { ForumGroup, MemberStatus } from "./types";
 import { normalizeSearchText } from "./search";
+import { normalizeSouthFloridaLocation } from "./locations";
 
 export type NormalizedValue<T> = {
   value?: T;
@@ -55,24 +56,8 @@ export const normalizeIndustryLabel = (raw: string): NormalizedValue<string> => 
   return { value: industryAliases[key] ?? titleCase(value) };
 };
 
-const locationAliases: Record<string, string> = {
-  boca: "Boca Raton",
-  bocaraton: "Boca Raton",
-  ftlauderdale: "Fort Lauderdale",
-  fortlauderdale: "Fort Lauderdale",
-  ftl: "Fort Lauderdale",
-  palmbeach: "Palm Beach",
-  coralgables: "Coral Gables",
-  miami: "Miami",
-  aventura: "Aventura",
-  plantation: "Plantation"
-};
-
 export const normalizeLocationLabel = (raw: string): NormalizedValue<string> => {
-  const value = normalizeOptionalText(raw);
-  if (!value) return {};
-  const key = normalizeSearchText(value).replaceAll(" ", "");
-  return { value: locationAliases[key] ?? titleCase(value) };
+  return normalizeSouthFloridaLocation(raw);
 };
 
 export const normalizeForumReference = (raw: string, forums: ForumGroup[]): NormalizedValue<{ name: string; forumId: string }> => {
